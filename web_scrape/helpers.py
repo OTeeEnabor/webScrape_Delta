@@ -6,6 +6,28 @@ from datetime import date
 import pandas as pd
 
 
+def sanitize_category(raw_category:str) -> str:
+    """
+    Transforms string to suitable category
+    
+    param: raw_category: string that is not suitable to use as category.
+
+    returns
+    clean_category: string suitable for use as a category. 
+    """
+    # remove whitespaces
+    white_space_pattern = r'\s'
+
+    clean_category = re.sub(white_space_pattern,"",raw_category)
+
+    # define unwanted characters
+    unwanted_characters = '[&,]'
+    
+    clean_category = re.sub(unwanted_characters,"_",clean_category)
+    
+    
+
+    return clean_category
 def get_store_url_dict(spreadsheet_name: str) -> dict:
     """
     Return dictionary that contains product categories as keys and their URLS as values.
@@ -34,35 +56,51 @@ def get_store_url_dict(spreadsheet_name: str) -> dict:
     return store_urls_df
 
 
-def create_directory(path):
+def create_directory(path) -> None:
     """
-    # create directory to store urls and logging file
+    create directory to store urls and logging file
 
     :param path: directory path where files will be stored.
 
     """
-    # get current date
-    today = date.today()
-    # create folder name to store url and log files
-    date_folder = f"{today.year}{today.month}{today.day}"
-
-    # get directory path for url and log files  folder
-    folder_path = f"{path}\\{date_folder}"
-
-    current_dir = os.getcwd()
-    folder_path = current_dir+folder_path
-
+    
     # check if folder has already been created
-    is_exists = os.path.exists(folder_path)
+    is_exists = os.path.exists(path)
     # if created
     if is_exists:
         # print exists - will be removed
         print("exists")
     else:
         # if does not exits, create the folder
-        # current_dir = os.getcwd()
-        # folder_path = current_dir+folder_path
-        # print(folder_path)
-        os.makedirs(folder_path)
+        
+        os.makedirs(path)
         # print folder created - will be removed
-        print(f"{folder_path} created")
+        print(f"{path} created")
+
+def create_product_urls_csv(product_urls_list:list, product_category:str, current_date:str, store_path:str):
+    """
+    create a csv file containing product urls
+
+    param: product_urls_list: a list of product urls scrapped from online store
+    param: product_category: category for which all the product urls belong to
+    param: current_date: date when urls were scrapped from internet and saved to the csv
+    param: store: name of the store
+
+    returns: product_urls_csv: csv file containing the product_urls
+    """
+
+    # create dictionary to store product url 
+    product_dict = {
+        "product_urls": product_urls_list,
+        "product_category": product_category,
+        "product_info_date": current_date
+    }
+
+    # convert dictionary to pandas dataframe
+    product_urls_df = pd.DataFrame(product_dict)
+
+    # write pandas dataframe to dataframe
+    product_urls_df.to_csv(f"{store_path}\\{product_category}.csv",index=False)
+    # give confirmation product_urls saved
+    print(f"{store_path}\\{product_category}.csv  saved")
+

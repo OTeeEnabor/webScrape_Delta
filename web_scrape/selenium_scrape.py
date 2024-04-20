@@ -60,6 +60,8 @@ def url_scraper(category_url:str, category:str) -> list:
                     next_page_button  = next_page_button[1]
                     # scroll to the button
                     driver.execute_script("arguments[0].scrollIntoView(true);", next_page_button)
+                    # click on button
+                    next_page_button.click()
                 else:
                     next_page_button = next_page_button[0]
                 driver.implicitly_wait(10)
