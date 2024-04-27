@@ -28,6 +28,7 @@ def sanitize_category(raw_category:str) -> str:
     
 
     return clean_category
+
 def get_store_url_dict(spreadsheet_name: str) -> dict:
     """
     Return dictionary that contains product categories as keys and their URLS as values.
@@ -104,3 +105,62 @@ def create_product_urls_csv(product_urls_list:list, product_category:str, curren
     # give confirmation product_urls saved
     print(f"{store_path}\\{product_category}.csv  saved")
 
+def create_product_data_directory():
+    """
+    Creates a directory to store the product scraped for that iteration
+    """
+    pass
+
+def weight_extract_convert(weight_string):
+    # combination regular expression
+    combination_weight_re = "[0-9]+ x [0-9]+ (g|kg|ml|L)|[0-9]+ x [0-9]+.[0-9]+ (g|kg|ml|L)|[0-9]+x[0-9]+.[0-9]+ (g|kg|ml|L)|[0-9]+x[0-9]+(g|kg|ml|L)"
+    # singular regular expression
+    singular_weight_re = "[0-9]+ (g|kg|ml|L)|[0-9]+(g|kg|ml|L)"
+
+    # check for combination string
+    if re.search(combination_weight_re, weight_string):
+        # split the string into list - [num units , weigh_per_unit]
+        combination_split = (
+            re.search(combination_weight_re, weight_string).group().split(" x ")
+        )
+        # num_units
+        num_units = int(combination_split[0])
+        # unit_string - [g,kg,ml, l]
+        weight_unit_string = combination_split[1]
+        # check if weight unit is grammes
+        if " g" in weight_unit_string:
+            # remove the gramme unit, convert string to float
+            weight = float(weight_unit_string.replace(" g", ""))
+            # divide weight by 1000 to convert to kg
+            weight = weight / 1000 * num_units
+        # check if weight unit is mil litres
+        elif " ml" in weight_unit_string:
+            # remove the ml unit, convert string to float
+            weight = float(weight_unit_string.replace(" ml", ""))
+            # divide wight by 1000 to L - 1l -kg
+            weight = weight / 1000 * num_units
+        # check if kg unit in string
+        elif " kg" in weight_unit_string:
+            # remove the kg unit in string, convert string to float
+            weight = float(weight_unit_string.replace(" kg", "")) * num_units
+        else:
+            # remove L unit in string, convert string to float
+            weight = float(weight_unit_string.replace(" L", "")) * num_units
+
+    elif re.search(singular_weight_re, weight_string):
+        # singular algorithm
+        weight_string_singular = re.search(singular_weight_re, weight_string).group()
+        if " g" in weight_string_singular:
+            weight = float(weight_string_singular.replace(" g", "")) / 1000
+        elif " ml" in weight_string_singular:
+            weight = float(weight_string_singular.replace(" ml", "")) / 1000
+        elif " kg" in weight_string_singular:
+            weight = float(weight_string_singular.replace(" kg", ""))
+        else:
+            weight = float(weight_string_singular.replace(" L", ""))
+    else:
+        weight = None
+    try:
+        return round(weight, 2)
+    except:
+        return None
