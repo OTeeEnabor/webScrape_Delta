@@ -1,6 +1,9 @@
 from datetime import date
+import itertools
 import os
 import pandas as pd
+import multiprocessing
+import concurrent.futures
 
 from bs4 import BeautifulSoup
 from selenium import webdriver
@@ -12,13 +15,16 @@ from . import helpers, selenium_scrape
 
 class StoreScraper:
 
-    def __init__(self):
+    def __init__(self, date_stamp=None):
         # initialize current date
         self.current_date = date.today()
         # initialize date stamp
-        self.date_stamp = (
-            f"{self.current_date.year}{self.current_date.month}{self.current_date.day}"
-        )
+        if date_stamp == None:
+            self.date_stamp = (
+                f"{self.current_date.year}{self.current_date.month}{self.current_date.day}"
+            )
+        else:
+            self.date_stamp = date_stamp
         # initialize store category information
         self.store_information_dict = helpers.get_store_url_dict(
             r"Store_Category_Sheet.xlsx"
@@ -75,10 +81,12 @@ class StoreScraper:
                     product_url_path,
                 )
 
-    def get_product_csv_dict(self, date=None) -> dict:
+    def get_product_csv_dict(self, scrape_date=None) -> dict:
 
-        if date is None:
-            date = self.date_stamp
+        if scrape_date is None:
+            scrape_date = self.date_stamp
+        else:
+            self.date_stamp = scrape_date
 
         # csv dictionary
         csv_dict = {}
@@ -88,81 +96,105 @@ class StoreScraper:
 
             # get all the csvs of today
             product_urls_csv_path = (
-                self.storage_path + f"{store}\\{date}\\{store}_product_urls"
+                self.storage_path + f"{store}\\{scrape_date}\\{store}_product_urls"
             )
 
             # product csv list
             product_urls_csvs = os.listdir(product_urls_csv_path)
+            # product csv list
+            product_urls_csvs = [
+                product_urls_csv_path + f"\\{file_name}"
+                for file_name in product_urls_csvs
+            ]
             # add list of csv to store key
             csv_dict[store] = product_urls_csvs
 
         return csv_dict
 
-    def get_product_data(self, csv_name, store, date=None):
-        if date is None:
-            date = self.date_stamp
-        # define csv absolute path
-        product_csv_path = self.storage_path + f"{store}\\{date}\\_product_urls"
-        # try to create a pandas dataframe
-        try:
-            product_df = pd.read_csv(f"{product_csv_path}\\{csv_name}")
-        except Exception as e:
-            print(f"{e} - could not read this file {product_csv_path}\\{csv_name}")
-        # define output list to store dictionaries
-        output_list_dicts = []
-        # get the product category
-        product_category = product_df["product_category"][0]
-        # get the product information date
-        product_info_date = product_df["product_info_date"][0]
-        # loop through the product_urls to scrape products
-        for product_link in product_df["product_urls"]:
-            print(product_link)  # debugging
-            # create the product dictionary
-            product_dict = {}
-            # set product category
-            product_dict["category"] = product_category
-            # set the date of product information
-            product_dict["date"] = product_info_date
-            # scrape with beautiful soup
-            try:
-                driver = self.driver
-                # get the web page
-                driver.get(product_link)
-                # parse the web page with beautiful soup
-                page_soup = BeautifulSoup(driver.page_source, "html.parser")
-            except Exception as e:
-                print(
-                    f"{e} - could not create a beautiful soup object from the given link"
+    # def get_product_data(self, csv_file_path):#name, store, scrape_date=None):
+    #     # if scrape_date is None:
+    #     #     scrape_date = self.date_stamp
+    #     # define csv absolute path
+    #     # product_csv_path = self.storage_path + f"{store}\\{scrape_date}\\_product_urls"
+    #     # try to create a pandas dataframe
+    #     try:
+    #         product_df = pd.read_csv(csv_file_path)
+    #     except Exception as e:
+    #         print(f"{e} - could not read this file {csv_file_path}")
+    #     # define output list to store dictionaries
+    #     output_list_dicts = []
+    #     # get the product category
+    #     product_category = product_df["product_category"][0]
+    #     # get the product information date
+    #     product_info_date = product_df["product_info_date"][0]
+    #     # loop through the product_urls to scrape products
+    #     for product_link in product_df["product_urls"]:
+    #         print(product_link)  # debugging
+    #         # create the product dictionary
+    #         product_dict = {}
+    #         # set product category
+    #         product_dict["category"] = product_category
+    #         # set the date of product information
+    #         product_dict["date"] = product_info_date
+    #         # scrape with beautiful soup
+    #         try:
+    #             driver = self.driver
+    #             # get the web page
+    #             driver.get(product_link)
+    #             # parse the web page with beautiful soup
+    #             page_soup = BeautifulSoup(driver.page_source, "html.parser")
+    #         except Exception as e:
+    #             print(
+    #                 f"{e} - could not create a beautiful soup object from the given link"
+    #             )
+    #         # get the product name
+    #         product_name = page_soup.css.select(".prod-name")[0].getText()
+    #         # get the product barcode
+    #         product_barcode = (
+    #             page_soup.find("li", string="Product code:")
+    #             .find_next_sibling()
+    #             .get_text()
+    #         )
+    #         # get the product price
+    #         product_price = float(
+    #             page_soup.css.select(f".prod--price")[0].getText().replace("R ", "")
+    #         )
+    #         # get the product weight
+    #         product_weight = helpers.weight_extract_convert(product_name)
+
+    #         product_dict["name"] = product_name
+    #         product_dict["barcode"] = product_barcode
+    #         product_dict["price"] = product_price
+    #         product_dict["weight"] = product_weight
+    #         product_dict["category"] = product_category
+    #         product_dict["info_date"] = product_info_date
+    #         product_dict["url"] = product_link
+
+    #         # append to list
+    #         output_list_dicts.append(product_dict)
+
+    #     # return list of dictionaries
+    #     return output_list_dicts
+
+    def multiprocess_scrape(self, store, scrape_date, csv_list):
+        if __name__ == "__main__":
+            with concurrent.futures.ProcessPoolExecutor() as executor:
+                scrape_results = [
+                    executor.submit(
+                        self.get_product_data,
+                        args=[csv_list, store],
+                        kwargs=[scrape_date],
+                    )
+                ]
+                final_list = list(itertools.chain(scrape_results))
+
+                # create output csv
+                product_data_df = pd.DataFrame(final_list)
+                # save to csv
+                product_data_df.to_csv(
+                    self.storage_path
+                    + f"{store}\\{scrape_date}\\{store}_product_data\\products_data_{scrape_date}.csv",
+                    index=False,
                 )
-            # get the product name
-            product_name = page_soup.css.select(".prod-name")[0].getText()
-            # get the product barcode
-            product_barcode = (
-                page_soup.find("li", string="Product code:")
-                .find_next_sibling()
-                .get_text()
-            )
-            # get the product price
-            product_price = float(
-                page_soup.css.select(f".prod--price")[0].getText().replace("R ", "")
-            )
-            # get the product weight
-            product_weight = helpers.weight_extract_convert(product_name)
-
-            product_dict["name"] = product_name
-            product_dict["barcode"] = product_barcode
-            product_dict["price"] = product_price
-            product_dict["weight"] = product_weight
-            product_dict["category"] = product_category
-            product_dict["info_date"] = product_info_date
-            product_dict["url"] = product_link
-
-            # append to list
-            output_list_dicts.append(product_dict)
-
-        # return list of dictionaries
-        return output_list_dicts
-    
-    def multiprocess_scrape(self):
-        pass
-    
+        else:
+            print("Not Executing")
