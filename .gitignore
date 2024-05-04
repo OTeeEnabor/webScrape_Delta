@@ -172,5 +172,6 @@ poetry.toml
 
 # LSP config files
 pyrightconfig.json
-
+# project specific
+web_scrape/throw_away.py
 # End of https://www.toptal.com/developers/gitignore/api/python
